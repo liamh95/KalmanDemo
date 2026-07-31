@@ -25,7 +25,7 @@ def shade_spans(ax, t, mask, color, label, alpha=0.18):
         labeled = True
 
 
-df = pd.read_csv('straight_line_no_proc_noise.csv')
+df = pd.read_csv('circle_no_proc_noise.csv')
 
 t = df['t']
 

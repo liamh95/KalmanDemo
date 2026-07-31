@@ -2,13 +2,44 @@
 #include <vector>
 #include <eigen3/Eigen/Dense>
 #include <cmath>
+#include <functional>
 #include <random>
 #include <fstream>
 #include <iomanip>
 #include "KalmanFilter.h"
+#include "TruthState.h"
+#include "Angles.h"
 
 
-constexpr double PROCESS_NOISE_STD_DEV = 0.3; // m / s^2
+
+
+// Truth-side process noise. It enters as a perturbation of the inputs -- the yaw
+// rate and longitudinal acceleration the driver is commanding -- rather than as a
+// white world-frame acceleration. Truck-shaped noise keeps truth on a path a truck
+// could actually drive; white world-frame noise would let it slide sideways.
+//
+// The consequence is that the filter's Q (white world-frame acceleration) is a
+// deliberately *wrong* model of this noise. That mismatch is the point: it is the
+// same kind of mismatch a real filter always has, and it is what makes comparing
+// these knobs against FILTER_SIGMA_A an experiment rather than a tautology.
+//
+// Units are random-walk intensities. A perturbation held across a step of length dt
+// is drawn with std dev sigma / sqrt(dt), so its integrated effect over that step is
+// sigma * sqrt(dt) and the trajectory statistics do not depend on TRUTH_DT.
+constexpr double SIM_SIGMA_OMEGA  {0.02}; // rad / sqrt(s), yaw rate wobble
+constexpr double SIM_SIGMA_ATRACK {0.30}; // m / s^(3/2), throttle/brake wobble
+
+// Estimator-side: the acceleration uncertainty the filter *assumes* when building Q.
+// This is a tuning knob, not a physical constant, and it does not have to match the
+// truth-side knobs above. Q has to absorb everything F fails to predict, which
+// includes deterministic model error: on a constant-turn trajectory the CV model is
+// wrong by v^2 / r, so this needs to cover that even with zero process noise.
+constexpr double FILTER_SIGMA_A {0.3}; // m / s^2
+
+// Truth is integrated on a fine grid and sampled from it, so sensors are free to run
+// at rates that do not divide the integration step.
+constexpr double TRUTH_DT {0.01}; // s
+
 //constexpr double DISTANCE_TOLERANCE {2.5}; // m
 constexpr double GATE_CHI_SQUARE_THRESHOLD {9.210}; // 99% confidence, 2 degrees of freedom (our  measurements are 2-dimensional)
 constexpr double GPS_LOCKOUT {2.0}; // s
@@ -53,6 +84,7 @@ struct Sensor{
         return H * x + L * sampleStdNormal(H.rows(), gen);
     }
 };
+
 
 
 struct DataFrame{
@@ -103,7 +135,7 @@ constexpr double LAMBDA_GPS_GARBAGE       {MEAN_GPS_GARBAGE_PER_MIN / 60.0};
 constexpr double LAMBDA_LIDAR_UNAVAIL     {MEAN_LIDAR_UNAVAIL_PER_MIN / 60.0};
 constexpr double LAMBDA_LIDAR_GARBAGE     {MEAN_LIDAR_GARBAGE_PER_MIN / 60.0};
 
-// TODO: add an optional parameter for process noise
+// TODO: add an optional parameter for process noise, defaulting to SIM_SIGMA_A
 // Garbage sensor data takes state and adds a big Gaussian to it
 SimData simulate(std::function<Eigen::Vector4d(double)> truth_at, const unsigned int random_seed){
 
@@ -138,7 +170,7 @@ SimData simulate(std::function<Eigen::Vector4d(double)> truth_at, const unsigned
     while (t < SIM_MAX_T){
         // Truth
         Eigen::Vector4d true_state = truth_at(t);
-        // Would add process noise here
+        // Would add process noise here: perturb by SIM_SIGMA_A * B * standard normal
         truth.push_back(true_state);
 
         // Measurement
@@ -216,7 +248,8 @@ int main(){
     bool use_gps = true;
     bool use_lidar = true;
 
-    SimData sim_data = simulate(straightLine, 0);
+    //SimData sim_data = simulate(straightLine, 0);
+    SimData sim_data = simulate(circle, 0);
 
 
 
@@ -229,7 +262,7 @@ int main(){
         return -1;
     }
 
-    std::ofstream csv_file("straight_line_no_proc_noise.csv");
+    std::ofstream csv_file("circle_no_proc_noise.csv");
     csv_file << std::setprecision(9);
     csv_file << "t,"
              << "x_true,"
@@ -254,7 +287,7 @@ int main(){
     Eigen::Vector4d x0 = Eigen::Vector4d::Zero();
     Eigen::Matrix4d P0 = Eigen::Matrix4d::Identity() * 1e6;
 
-    KalmanFilter filter(x0, P0, PROCESS_NOISE_STD_DEV);
+    KalmanFilter filter(x0, P0, FILTER_SIGMA_A);
 
     // Process first frame without gating
     double prev_t = data[0].time;
