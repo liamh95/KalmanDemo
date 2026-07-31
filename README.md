@@ -63,8 +63,8 @@ Do IMM between constant velocity and constant acceleration models.
 
 # Run it yourself
 - Dependencies: [Eigen](https://libeigen.gitlab.io/) and Python with numpy, pandas and matplotlib.
-- Clone the repo and checkout the most recent commit that actually runs: `git clone https://github.com/liamh95/KalmanDemo && cd KalmanDemo && git checkout 28242a7`.
-- To run it, `g++ -std=c++17 KalmanDemo.cpp KalmanFilter.cpp -o kalman_demo && ./kalman_demo` followed by `python3 plot_filter.py`.
+- Clone the repo and checkout the most recent commit that actually runs: `git clone https://github.com/liamh95/KalmanDemo && cd KalmanDemo && git checkout v0.1-cv-demo`.
+- To run it, `g++ -std=c++17 src/*.cpp -o kalman_demo && ./kalman_demo` followed by `python3 plot_filter.py`.
 
 
 
