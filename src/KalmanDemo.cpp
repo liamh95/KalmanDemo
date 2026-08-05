@@ -9,6 +9,7 @@
 #include "KalmanFilter.h"
 #include "TruthState.h"
 #include "Angles.h"
+#include "Random.h"
 
 
 
@@ -66,14 +67,7 @@ const Eigen::Matrix<double, 2, 4> LID_MATRIX {
     {0.0, 1.0, 0.0, 0.0}
 };
 
-Eigen::VectorXd sampleStdNormal(Eigen::Index n, std::mt19937& gen){
-    Eigen::VectorXd ret(n);
-    std::normal_distribution<double> dist(0.0, 1.0);
-    for(Eigen::Index i = 0; i < n; i++){
-        ret(i) = dist(gen);
-    }
-    return ret;
-}
+
 
 // would this be a class in an ideal world since L * L^T = R should be invariant?
 struct Sensor{

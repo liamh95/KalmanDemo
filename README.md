@@ -1,10 +1,12 @@
 # What is this?
 
-**Linear Kalman filter for 2D constant-velocity tracking with multi-sensor fusion and dropout handling.**
+**Extended Kalman filter for 2D tracking with multi-sensor fusion, IMM over CV/CA models, and dropout handling**
 
 
 This demo simulates the trajectory of a self-driving truck equipped with sensors (IMU, GPS and LiDAR) and uses a Kalman filter to estimate this trajectory.
 Simulation and estimates are output to a `.csv` file and plotted with the accompanying Python script.
+
+A constant-velocity model demo runs at tag `v0.1-cv-demo`. Currently, `main()` is mid-rebuild toward EKF/IMM.
 
 
 # Background
@@ -52,6 +54,14 @@ Three big issues here are how we modeled the sensors, how we modeled the noise a
 
 An IMU sensor measures forces and angular velocities in the body-frame, not world-frame $x$ and $y$ velocities. It's also usually used as an input. We've also modeled the lidar as essentially another GPS. In reality, we have two choices: mount the lidar to the truck or a base station, and in either case, have it receive bearing and radial distance measurements.
 
+Furthermore, on a circle, the true acceleration is centripetal (always pointing towards the center), so it's constantly changing.
+A CV model has no acceleration state, so this acceleration is all absorbed into process noise as far as the filter knows. This is where we get the constant bias in $y$ and the velocity errors tracing out clean sinusoids.
+
+This explains why the GPS was dropping out for most of the run: we have a self-reinforcing failure loop.
+Because we incorrectly specified the model (we have a changing acceleration, while the model thinks acceleration is constant), the estimate drifts and innovations grow large.
+The $\chi^2$-gate reads this as a bad measurement and rejects the GPS, leading the filter to lose its only absolute position correction.
+Then the estimate drifts further, the gate rejects harder and so on...
+Really, the gate is working exactly as intended: it just can't distinguish a bad measurement from a bad model.
 
 
 # Plan going forward
@@ -79,11 +89,21 @@ Do IMM between constant velocity and constant acceleration models.
 
 - Trajectory is made from a TrajectoryProfile by integrating with RK4 and injecting process noise.
 
-- Trajectory holds a vector<TruthState> and has a function to sample() from the trajectory at an arbitrary time, done by linearly interpolating between the two closest time steps contained in the vector
+- Trajectory holds a vector<TruthState> and has a function to sample() from the trajectory at an arbitrary time, done by linearly interpolating between the two closest time steps contained in the vector.
+
+- Split how the filter models a sensor and how the sensor actually gets simulated in the main sim loop.
+In particular, a sensor's true covariance can differ from the covariance the filter believes to be true.
+We can also allow a lidar mast's true position to differ from where the filter actually thinks it is.
+
+- Added `rate_hz` and `latency` parameters to sensors, allowing for asynchronous measurement.
 
 
 # To do
 
+- Next up: wire up `Trajectory`, `SensorSim`, `Measurement` and `TruthState` to the main simulation loop. The sim loop should walk a `Trajectory`, fire each `SensorSim` on its own rate, apply scenario-level dropout/outliers and emit `vector<TruthState>` + `vector<Measurement>` sorted by `t_arrived`.
+
 - Add control input
 
 - Add more trajectories (e.g. lane change, stop and go, slamming the brakes)
+
+- More systematic metrics for evaluating how well the filter is performing

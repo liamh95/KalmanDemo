@@ -1,24 +1,17 @@
+#ifndef MEASUREMENT_H
+#define MEASUREMENT_H
+
 #include <eigen3/Eigen/Core>
-
-
-enum SensorType{
-
-    IMU,
-    GPS,
-    Lidar,
-};
+#include "SensorID.h"
 
 
 struct Measurement{
-    SensorType sensorID;
+    SensorID sensor_id;
     double t_generated {0.0};
-    // Filter shouldn't be able to distinguish these? But simulation should be able to add delay between them?
+    // Filter shouldn't be able to distinguish these, but simulation should be able to add delay between them.
     double t_arrived {0.0};
     Eigen::VectorXd z;
 };
 
 
-struct MeasurementModel{
-    Eigen::MatrixXd R; // observation noise covariance
-    
-};
+#endif
